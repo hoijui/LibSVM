@@ -23,9 +23,11 @@ class Cache
 	private long size;
 	private final class head_t
 	{
-		head_t prev, next;	// a cicular list
+		/** a circular list */
+		head_t prev, next;
 		float[] data;
-		int len;		// data[0,len) is cached in this entry
+		/** data[0,len) is cached in this entry */
+		int len;
 	}
 	private final head_t[] head;
 	private head_t lru_head;
@@ -43,16 +45,16 @@ class Cache
 		lru_head.next = lru_head.prev = lru_head;
 	}
 
+	/** delete from current location */
 	private void lru_delete(head_t h)
 	{
-		// delete from current location
 		h.prev.next = h.next;
 		h.next.prev = h.prev;
 	}
 
+	/** insert to last position */
 	private void lru_insert(head_t h)
 	{
-		// insert to last position
 		h.next = lru_head;
 		h.prev = lru_head.prev;
 		h.prev.next = h;
@@ -65,7 +67,7 @@ class Cache
 	 * (p >= len if nothing needs to be filled)
 	 * java: simulate pointer using single-element array
 	 */
-	int get_data(int index, Qfloat[][] data, int len)
+	int get_data(int index, float[][] data, int len)
 	{
 		head_t h = head[index];
 		if(h.len > 0) lru_delete(h);
@@ -150,12 +152,11 @@ class Cache
 
 /**
  * Kernel evaluation
- *
- * the static method k_function is for doing single kernel evaluation
- * the constructor of Kernel prepares to calculate the l*l kernel matrix
- * the member function get_Q is for getting one column from the Q Matrix
  */
 abstract class QMatrix {
+	/**
+	 * Returns one column from the Q Matrix
+	 */
 	abstract float[] get_Q(int column, int len);
 	abstract double[] get_QD();
 	abstract void swap_index(int i, int j);
@@ -231,10 +232,13 @@ abstract class Kernel extends QMatrix {
 			case svm_parameter.PRECOMPUTED:
 				return x[i][sampleSerialNumbers[j]].value;
 			default:
-				return 0;	// java
+				return 0; // java
 		}
 	}
 
+	/**
+	 * Prepares to calculate the l*l kernel matrix
+	 */
 	Kernel(int l, svm_node[][] x_, svm_parameter param)
 	{
 		this.kernel_type = param.kernel_type;
@@ -284,6 +288,9 @@ abstract class Kernel extends QMatrix {
 		return sum;
 	}
 
+	/**
+	 * For doing single kernel evaluation
+	 */
 	static double k_function(svm_node[] x, svm_node[] y,
 					svm_parameter param)
 	{
@@ -347,12 +354,12 @@ abstract class Kernel extends QMatrix {
  * An SMO algorithm in Fan et al., JMLR 6(2005), p. 1889--1918
  * Solves:
  *
- *	min 0.5(\alpha^T Q \alpha) + p^T \alpha
+ * <code>min 0.5(\alpha^T Q \alpha) + p^T \alpha
  *
  *		y^T \alpha = \delta
  *		y_i = +1 or -1
  *		0 <= alpha_i <= Cp for y_i = 1
- *		0 <= alpha_i <= Cn for y_i = -1
+ *		0 <= alpha_i <= Cn for y_i = -1</code>
  *
  * Given:
  *
@@ -368,11 +375,13 @@ class Solver {
 
 	int active_size;
 	byte[] y;
-	double[] G;		// gradient of objective function
+	/** gradient of objective function */
+	double[] G;
 	static final byte LOWER_BOUND = 0;
 	static final byte UPPER_BOUND = 1;
 	static final byte FREE = 2;
-	byte[] alpha_status;	// LOWER_BOUND, UPPER_BOUND, FREE
+	/** may contain values of LOWER_BOUND, UPPER_BOUND, FREE */
+	byte[] alpha_status;
 	double[] alpha;
 	QMatrix Q;
 	double[] QD;
@@ -380,9 +389,10 @@ class Solver {
 	double Cp,Cn;
 	double[] p;
 	int[] active_set;
-	double[] G_bar;		// gradient, if we treat free variables as 0
+	/** gradient, if we treat free variables as 0 */
+	double[] G_bar;
 	int l;
-	boolean unshrink;	// XXX
+	boolean unshrink; // XXX
 
 	static final double INF = java.lang.Double.POSITIVE_INFINITY;
 
@@ -402,8 +412,10 @@ class Solver {
 	boolean is_lower_bound(int i) { return alpha_status[i] == LOWER_BOUND; }
 	boolean is_free(int i) {  return alpha_status[i] == FREE; }
 
-	// java: information about solution except alpha,
-	// because we cannot return multiple values otherwise...
+	/**
+	 * java: information about solution except alpha,
+	 * because we cannot return multiple values otherwise...
+	 */
 	static class SolutionInfo {
 		double obj;
 		double rho;
@@ -762,15 +774,16 @@ class Solver {
 		svm.info("\noptimization finished, #iter = "+iter+"\n");
 	}
 
-	// return 1 if already optimal, return 0 otherwise
+	/**
+	 * Calculates i,j such that:
+	 * i: maximizes -y_i * grad(f)_i, i in I_up(\alpha)
+	 * j: minimizes the decrease of obj value
+	 *   (if quadratic coefficient <= 0, replace it with TAU)
+	 *   -y_j*grad(f)_j < -y_i*grad(f)_i, j in I_low(\alpha)
+	 * @return 1 if already optimal, 0 otherwise
+	 */
 	int select_working_set(int[] working_set)
 	{
-		// return i,j such that
-		// i: maximizes -y_i * grad(f)_i, i in I_up(\alpha)
-		// j: mimimizes the decrease of obj value
-		//    (if quadratic coefficeint <= 0, replace it with TAU)
-		//    -y_j*grad(f)_j < -y_i*grad(f)_i, j in I_low(\alpha)
-
 		double Gmax = -INF;
 		double Gmax2 = -INF;
 		int Gmax_idx = -1;
@@ -885,8 +898,8 @@ class Solver {
 	void do_shrinking()
 	{
 		int i;
-		double Gmax1 = -INF;		// max { -y_i * grad(f)_i | i in I_up(\alpha) }
-		double Gmax2 = -INF;		// max { y_i * grad(f)_i | i in I_low(\alpha) }
+		double Gmax1 = -INF; // max { -y_i * grad(f)_i | i in I_up(\alpha) }
+		double Gmax2 = -INF; // max { y_i * grad(f)_i | i in I_low(\alpha) }
 
 		// find maximal violating pair first
 		for(i=0;i<active_size;i++)
@@ -983,7 +996,7 @@ class Solver {
 }
 
 /**
- * Solver for nu-svm classification and regression
+ * Solver for nu-SVM classification and regression
  *
  * additional constraint: e^T \alpha = constant
  */
@@ -999,14 +1012,16 @@ final class Solver_NU extends Solver
 		super.Solve(l,Q,p,y,alpha,Cp,Cn,eps,si,shrinking);
 	}
 
-	// return 1 if already optimal, return 0 otherwise
+	/**
+	 * Returns i,j such that y_i = y_j and
+	 * i: maximizes -y_i * grad(f)_i, i in I_up(\alpha)
+	 * j: minimizes the decrease of obj value
+	 *   (if quadratic coefficient <= 0, replace it with tau)
+	 *   -y_j*grad(f)_j < -y_i*grad(f)_i, j in I_low(\alpha)
+	 * @return 1 if already optimal, 0 otherwise
+	 */
 	int select_working_set(int[] working_set)
 	{
-		// return i,j such that y_i = y_j and
-		// i: maximizes -y_i * grad(f)_i, i in I_up(\alpha)
-		// j: minimizes the decrease of obj value
-		//    (if quadratic coefficeint <= 0, replace it with TAU)
-		//    -y_j*grad(f)_j < -y_i*grad(f)_i, j in I_low(\alpha)
 
 		double Gmaxp = -INF;
 		double Gmaxp2 = -INF;
@@ -1134,10 +1149,10 @@ final class Solver_NU extends Solver
 
 	void do_shrinking()
 	{
-		double Gmax1 = -INF;	// max { -y_i * grad(f)_i | y_i = +1, i in I_up(\alpha) }
-		double Gmax2 = -INF;	// max { y_i * grad(f)_i | y_i = +1, i in I_low(\alpha) }
-		double Gmax3 = -INF;	// max { -y_i * grad(f)_i | y_i = -1, i in I_up(\alpha) }
-		double Gmax4 = -INF;	// max { y_i * grad(f)_i | y_i = -1, i in I_low(\alpha) }
+		double Gmax1 = -INF; // max { -y_i * grad(f)_i | y_i = +1, i in I_up(\alpha) }
+		double Gmax2 = -INF; // max { y_i * grad(f)_i | y_i = +1, i in I_low(\alpha) }
+		double Gmax3 = -INF; // max { -y_i * grad(f)_i | y_i = -1, i in I_up(\alpha) }
+		double Gmax4 = -INF; // max { y_i * grad(f)_i | y_i = -1, i in I_low(\alpha) }
 
 		// find maximal violating pair first
 		int i;
@@ -1521,7 +1536,7 @@ public class svm
 		byte[] ones = new byte[l];
 		int i;
 
-		int n = (int)(param.nu*prob.l);	// # of alpha's at upper bound
+		int n = (int)(param.nu*prob.l); // # of alpha's at upper bound
 
 		for(i=0;i<n;i++)
 			alpha[i] = 1;
@@ -1607,14 +1622,11 @@ public class svm
 			alpha[i] = alpha2[i] - alpha2[i+l];
 	}
 
-	//
-	// decision_function
-	//
-	static class decision_function
+	private static class decision_function
 	{
 		double[] alpha;
 		double rho;
-	};
+	}
 
 	static decision_function svm_train_one(
 		svm_problem prob, svm_parameter param,
@@ -1674,7 +1686,7 @@ public class svm
 	}
 
 	/**
-	 * Platt's binary SVM Probablistic Output: an improvement from Lin et al.
+	 * Platt's binary SVM Probabilistic Output: an improvement from Lin et al.
 	 */
 	private static void sigmoid_train(int l, double[] dec_values, double[] labels,
 				  double[] probAB)
@@ -1687,9 +1699,9 @@ public class svm
 			if (labels[i] > 0) prior1+=1;
 			else prior0+=1;
 
-		int max_iter=100;	// Maximal number of iterations
-		double min_step=1e-10;	// Minimal step taken in line search
-		double sigma=1e-12;	// For numerically strict PD of Hessian
+		int max_iter=100; // Maximal number of iterations
+		double min_step=1e-10; // Minimal step taken in line search
+		double sigma=1e-12; // For numerically strict PD of Hessian
 		double eps=1e-5;
 		double hiTarget=(prior1+1.0)/(prior1+2.0);
 		double loTarget=1/(prior0+2.0);
@@ -1751,7 +1763,7 @@ public class svm
 			gd=g1*dA+g2*dB;
 
 
-			stepsize = 1;		// Line Search
+			stepsize = 1; // Line Search
 			while (stepsize >= min_step)
 			{
 				newA = A + stepsize * dA;
@@ -1980,7 +1992,10 @@ public class svm
 	}
 
 	/**
-	 * label: label name, start: begin of each class, count: #data of classes, perm: indices to the original data
+	 * @param label_ret label name
+	 * @param start_ret begin of each class
+	 * @param count_ret #data of classes
+	 * @param perm indices to the original data
 	 * perm, length l, must be allocated before calling this subroutine
 	 */
 	private static void svm_group_classes(svm_problem prob, int[] nr_class_ret, int[][] label_ret, int[][] start_ret, int[][] count_ret, int[] perm)
@@ -2286,7 +2301,7 @@ public class svm
 		int l = prob.l;
 		int[] perm = new int[l];
 
-		// stratified cv may not give leave-one-out rate
+		// stratified CV may not give leave-one-out rate
 		// Each class to l folds -> some folds may have zero elements
 		if((param.svm_type == svm_parameter.C_SVC ||
 		    param.svm_type == svm_parameter.NU_SVC) && nr_fold < l)
