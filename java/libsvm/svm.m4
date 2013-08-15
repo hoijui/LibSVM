@@ -207,14 +207,7 @@ abstract class Kernel extends QMatrix {
 
 	private static double powi(double base, int times)
 	{
-		double tmp = base, ret = 1.0;
-
-		for(int t=times; t>0; t/=2)
-		{
-			if(t%2==1) ret*=tmp;
-			tmp = tmp * tmp;
-		}
-		return ret;
+		return Math.pow(base, times);
 	}
 
 	double kernel_function(int i, int j)
